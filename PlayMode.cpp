@@ -39,16 +39,19 @@ Load< Scene > hexapod_scene(LoadTagDefault, []() -> Scene const * {
 PlayMode::PlayMode() : scene(*hexapod_scene) {
 	//get pointers to leg for convenience:
 	for (auto &transform : scene.transforms) {
-		if (transform.name == "Hip.FL") hip = &transform;
-		else if (transform.name == "UpperLeg.FL") upper_leg = &transform;
-		else if (transform.name == "LowerLeg.FL") lower_leg = &transform;
+		if (transform.name == "Ground") ground = &transform;
+		if (transform.name == "UpperLeg.FL") upper_leg = &transform;
+		if (transform.name == "LowerLeg.FL") lower_leg = &transform;
+		if(transform.name=="Sphere")playerBall=&transform;
+		if(transform.name.substr(0,4)=="Coin")coins.push_back(&transform);
+		if(transform.name.substr(0,4)=="Coll")colliders.push_back(&transform);
 	}
-	if (hip == nullptr) throw std::runtime_error("Hip not found.");
-	if (upper_leg == nullptr) throw std::runtime_error("Upper leg not found.");
+	if (ground == nullptr) throw std::runtime_error("ground not found.");
+	if (playerBall == nullptr) throw std::runtime_error("Sphere not found.");
 	if (lower_leg == nullptr) throw std::runtime_error("Lower leg not found.");
-
-	hip_base_rotation = hip->rotation;
-	upper_leg_base_rotation = upper_leg->rotation;
+	std::cout<<coins.size()<<std::endl;
+	hip_base_rotation = ground->rotation;
+	upper_leg_base_rotation = coins[0]->rotation;
 	lower_leg_base_rotation = lower_leg->rotation;
 
 	//get pointer to camera for convenience:
@@ -106,12 +109,12 @@ bool PlayMode::handle_event(SDL_Event const &evt, glm::uvec2 const &window_size)
 			glm::vec2 motion = glm::vec2(
 				evt.motion.xrel / float(window_size.y),
 				-evt.motion.yrel / float(window_size.y)
-			);
+			);/*
 			camera->transform->rotation = glm::normalize(
 				camera->transform->rotation
 				* glm::angleAxis(-motion.x * camera->fovy, glm::vec3(0.0f, 1.0f, 0.0f))
 				* glm::angleAxis(motion.y * camera->fovy, glm::vec3(1.0f, 0.0f, 0.0f))
-			);
+			);*/
 			return true;
 		}
 	}
@@ -124,11 +127,10 @@ void PlayMode::update(float elapsed) {
 	//slowly rotates through [0,1):
 	wobble += elapsed / 10.0f;
 	wobble -= std::floor(wobble);
-
-	hip->rotation = hip_base_rotation * glm::angleAxis(
-		glm::radians(5.0f * std::sin(wobble * 2.0f * float(M_PI))),
-		glm::vec3(0.0f, 1.0f, 0.0f)
-	);
+//	hip->rotation = hip_base_rotation * glm::angleAxis(
+//		glm::radians(5.0f * std::sin(wobble * 2.0f * float(M_PI))),
+//		glm::vec3(0.0f, 1.0f, 0.0f)
+//	);
 	upper_leg->rotation = upper_leg_base_rotation * glm::angleAxis(
 		glm::radians(7.0f * std::sin(wobble * 2.0f * 2.0f * float(M_PI))),
 		glm::vec3(0.0f, 0.0f, 1.0f)
@@ -139,6 +141,7 @@ void PlayMode::update(float elapsed) {
 	);
 
 	//move camera:
+	//move the SnowBall;
 	{
 
 		//combine inputs into a move:
@@ -152,14 +155,59 @@ void PlayMode::update(float elapsed) {
 		//make it so that moving diagonally doesn't go faster:
 		if (move != glm::vec2(0.0f)) move = glm::normalize(move) * PlayerSpeed * elapsed;
 
-		glm::mat4x3 frame = camera->transform->make_local_to_parent();
+		glm::mat4x3 worldPosition=ground->make_local_to_world();//get the world vector of the ground
+		glm::vec3 world_right=glm::normalize(worldPosition[0]);
+		glm::vec3 world_forward=glm::normalize(worldPosition[1]);
+		glm::vec3 world_up=-glm::normalize(worldPosition[2]);
+
+
+		glm::mat4x3 frame = camera->transform->make_local_to_world();
 		glm::vec3 frame_right = frame[0];
 		//glm::vec3 up = frame[1];
 		glm::vec3 frame_forward = -frame[2];
+		currentForce=(move.x * world_right + move.y * world_forward)*50.0f-currentSpeed*1.0f;
+		currentSpeed+=currentForce*elapsed;
 
-		camera->transform->position += move.x * frame_right + move.y * frame_forward;
+		playerBall->scale=glm::vec3(SnowBallWeight,SnowBallWeight,SnowBallWeight);
+	//	camera->transform->position += move.x * frame_right + move.y * frame_forward;
+	}
+	//Rotate Coins
+	for(int i=0;i<coins.size();++i){
+		//glm::quat=glm::quat(,);
+		coins[i]->rotation = coins[i]->rotation * glm::angleAxis(
+		glm::radians(700.0f * elapsed),
+		glm::vec3(1.0f, 0.0f, 0.0f)
+	);
+	}
+	//Detect Collision between Coins and Player
+	for(int i=0;i<coins.size();++i){
+		glm::vec3 distance=coins[i]->position-playerBall->position;
+	//	std::cout<<glm::length(distance)<<std::endl;
+		if(glm::length(distance)<SnowBallWeight){
+			std::cout<<"Coin Touched"<<std::endl;
+			currentCoinEaten++;
+			coins[i]->position=glm::vec3(1000.0f,0,0);
+			SnowBallWeight=SnowBallWeight+0.15f;
+			if(currentCoinEaten==4){
+				win=true;
+			}
+		}
+	}
+	//Detect Collision between Player and Colliders
+	for(int i=0;i<colliders.size();++i){
+		glm::vec3 distance=colliders[i]->position-playerBall->position;
+		if(glm::length(distance)<0.7*glm::length( SnowBallWeight+colliders[i]->scale*0.5f)){
+			//now, if the current vector is toward it ,stop it
+			glm::vec3 nextframe=playerBall->position+currentSpeed*elapsed;
+			glm::vec3 newDistance=nextframe-colliders[i]->position;
+			if(glm::length(distance)>glm::length(newDistance)){
+				currentSpeed=glm::vec3(0,0,0);
+			}
+		}
 	}
 
+	playerBall->position+=currentSpeed*elapsed;
+	camera->transform->position =playerBall->position+glm::vec3(0.0f,-14.0f,25.0f);
 	//reset button press counters:
 	left.downs = 0;
 	right.downs = 0;
@@ -201,14 +249,26 @@ void PlayMode::draw(glm::uvec2 const &drawable_size) {
 		));
 
 		constexpr float H = 0.09f;
-		lines.draw_text("Mouse motion rotates camera; WASD moves; escape ungrabs mouse",
+		lines.draw_text("WASD moves the ball; escape ungrabs mouse",
 			glm::vec3(-aspect + 0.1f * H, -1.0 + 0.1f * H, 0.0),
 			glm::vec3(H, 0.0f, 0.0f), glm::vec3(0.0f, H, 0.0f),
 			glm::u8vec4(0x00, 0x00, 0x00, 0x00));
-		float ofs = 2.0f / drawable_size.y;
-		lines.draw_text("Mouse motion rotates camera; WASD moves; escape ungrabs mouse",
+		lines.draw_text("Eat all coin to grow up",
+			glm::vec3(-aspect + 1.2f * H, -1.0 + 1.2f * H, 0.0),
+			glm::vec3(H, 0.0f, 0.0f), glm::vec3(0.0f, H, 0.0f),
+			glm::u8vec4(0x00, 0x00, 0x00, 0x00));
+
+		if(win){
+			lines.draw_text("Eat Other snow ball to grow up",
+			glm::vec3(-aspect + 1.2f * H, -1.0 + 1.2f * H, 0.0),
+			glm::vec3(H, 0.0f, 0.0f), glm::vec3(0.0f, H, 0.0f),
+			glm::u8vec4(0x00, 0x00, 0x00, 0x00));
+		}
+
+		//float ofs = 2.0f / drawable_size.y;
+		/*lines.draw_text("Mouse motion rotates camera; WASD moves; escape ungrabs mouse",
 			glm::vec3(-aspect + 0.1f * H + ofs, -1.0 + + 0.1f * H + ofs, 0.0),
 			glm::vec3(H, 0.0f, 0.0f), glm::vec3(0.0f, H, 0.0f),
-			glm::u8vec4(0xff, 0xff, 0xff, 0x00));
+			glm::u8vec4(0xff, 0xff, 0xff, 0x00));*/
 	}
 }

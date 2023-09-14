@@ -28,9 +28,16 @@ struct PlayMode : Mode {
 	Scene scene;
 
 	//hexapod leg to wobble:
-	Scene::Transform *hip = nullptr;
+	Scene::Transform *ground = nullptr;
 	Scene::Transform *upper_leg = nullptr;
 	Scene::Transform *lower_leg = nullptr;
+	Scene::Transform *playerBall=nullptr;
+
+
+	std::vector<Scene::Transform*> coins;
+	std::vector<Scene::Transform*> colliders;
+	int currentCoinEaten=0;
+
 	glm::quat hip_base_rotation;
 	glm::quat upper_leg_base_rotation;
 	glm::quat lower_leg_base_rotation;
@@ -38,5 +45,8 @@ struct PlayMode : Mode {
 	
 	//camera:
 	Scene::Camera *camera = nullptr;
-	//float SnowBallWeight;
+	float SnowBallWeight=1.0f;
+	bool win=false;
+	glm::vec3 currentSpeed;
+	glm::vec3 currentForce;
 };
