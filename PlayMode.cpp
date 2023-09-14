@@ -22,8 +22,12 @@ Load< MeshBuffer > hexapod_meshes(LoadTagDefault, []() -> MeshBuffer const * {
 Load< Scene > hexapod_scene(LoadTagDefault, []() -> Scene const * {
 	return new Scene(data_path("MyTestScene.scene"), [&](Scene &scene, Scene::Transform *transform, std::string const &mesh_name){
 		Mesh const &mesh = hexapod_meshes->lookup(mesh_name);
+		if(transform->name.substr(0,4)=="Coll"){
 
-		scene.drawables.emplace_back(transform);
+		}else{
+			scene.drawables.emplace_back(transform);
+		}
+
 		Scene::Drawable &drawable = scene.drawables.back();
 
 		drawable.pipeline = lit_color_texture_program_pipeline;
@@ -188,15 +192,20 @@ void PlayMode::update(float elapsed) {
 			currentCoinEaten++;
 			coins[i]->position=glm::vec3(1000.0f,0,0);
 			SnowBallWeight=SnowBallWeight+0.15f;
-			if(currentCoinEaten==4){
-				win=true;
-			}
+
 		}
 	}
 	//Detect Collision between Player and Colliders
 	for(int i=0;i<colliders.size();++i){
 		glm::vec3 distance=colliders[i]->position-playerBall->position;
+
 		if(glm::length(distance)<0.7*glm::length( SnowBallWeight+colliders[i]->scale*0.5f)){
+			if(colliders[i]->name=="Collider.001"){
+				if(currentCoinEaten>=10){
+					win=true;
+				}
+			std::cout<<"FInal"<<std::endl;
+		}
 			//now, if the current vector is toward it ,stop it
 			glm::vec3 nextframe=playerBall->position+currentSpeed*elapsed;
 			glm::vec3 newDistance=nextframe-colliders[i]->position;
@@ -207,6 +216,9 @@ void PlayMode::update(float elapsed) {
 	}
 
 	playerBall->position+=currentSpeed*elapsed;
+	glm::vec3 temp=currentSpeed*elapsed;
+	glm::vec3 tempRotate(-temp.y,temp.x,0);
+	playerBall->rotation*=glm::quat(tempRotate);
 	camera->transform->position =playerBall->position+glm::vec3(0.0f,-14.0f,25.0f);
 	//reset button press counters:
 	left.downs = 0;
@@ -253,14 +265,19 @@ void PlayMode::draw(glm::uvec2 const &drawable_size) {
 			glm::vec3(-aspect + 0.1f * H, -1.0 + 0.1f * H, 0.0),
 			glm::vec3(H, 0.0f, 0.0f), glm::vec3(0.0f, H, 0.0f),
 			glm::u8vec4(0x00, 0x00, 0x00, 0x00));
-		lines.draw_text("Eat all coin to grow up",
+		lines.draw_text("Eat coins to grow up",
 			glm::vec3(-aspect + 1.2f * H, -1.0 + 1.2f * H, 0.0),
 			glm::vec3(H, 0.0f, 0.0f), glm::vec3(0.0f, H, 0.0f),
 			glm::u8vec4(0x00, 0x00, 0x00, 0x00));
 
 		if(win){
-			lines.draw_text("Eat Other snow ball to grow up",
-			glm::vec3(-aspect + 1.2f * H, -1.0 + 1.2f * H, 0.0),
+			lines.draw_text("The House was Destroyed by the big snowBall!",
+			glm::vec3(-aspect + 8.0f * H, -1.0 + 8.0f * H, 0.0),
+			glm::vec3(H, 0.0f, 0.0f), glm::vec3(0.0f, H, 0.0f),
+			glm::u8vec4(0x00, 0x00, 0x00, 0x00));
+		}else if(currentCoinEaten<10){
+			lines.draw_text("You need to grow bigger to destroy the house",
+			glm::vec3(-aspect + 8.0f * H, -1.0 + 8.0f * H, 0.0),
 			glm::vec3(H, 0.0f, 0.0f), glm::vec3(0.0f, H, 0.0f),
 			glm::u8vec4(0x00, 0x00, 0x00, 0x00));
 		}
