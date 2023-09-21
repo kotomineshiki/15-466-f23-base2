@@ -47,6 +47,6 @@ struct PlayMode : Mode {
 	Scene::Camera *camera = nullptr;
 	float SnowBallWeight=1.0f;
 	bool win=false;
-	glm::vec3 currentSpeed;
-	glm::vec3 currentForce;
+	glm::vec3 currentSpeed=new glm::vec3(0,0,0);
+	glm::vec3 currentForce=new glm::vec3(0,0,0);
 };
